@@ -10,7 +10,14 @@ from app.models.citizen_report import CitizenReport
 
 CATEGORY_KEYWORDS = {
     "landslide": ("landslide", "भूस्खलन", "मलबा", "पहाड़ी गिरी", "चट्टान", "pahad gir gaya", "pahad gira", "malba gira", "malba aa gaya", "पहाड़ गिर गया", "मलबा गिरा"),
-    "road_blockage": ("road blockage", "road blocked", "road block", "road band", "sadak band", "सड़क बंद", "सड़क अवरुद्ध", "रास्ता बंद", "आवाजाही बंद"),
+    "road_blockage": (
+        "road blockage", "road blocked", "road block", "road band",
+        "sadak band", "सड़क बंद", "सड़क अवरुद्ध", "रास्ता बंद",
+        "आवाजाही बंद", "rod block", "rod blocked",
+        "rod block ho gyi", "road block ho gyi",
+        "road band ho gaya", "raasta band", "rasta band",
+        "sadak band ho gayi", "malba se road band",
+    ),
     "cloudburst": ("cloudburst", "badal phata", "बादल फटा"),
     "building_damage": ("building damage", "house collapsed", "ghar toot gaya", "घर टूट गया", "मकान टूट गया", "घर ढह गया"),
     "heavy_rainfall": ("heavy rainfall", "heavy rain", "तेज बारिश", "भारी बारिश", "लगातार बारिश"),
