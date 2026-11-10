@@ -22,3 +22,21 @@ export async function getVillageImpacts(): Promise<VillageImpact[]> {
   return response.json();
 }
 
+export type IncidentClassification = { predicted_category: string; confidence_score: number; matched_keywords: string[] };
+export type SeverityRecommendation = { recommended_severity: string; explanation: string; evidence: string[]; human_verification_required: boolean };
+export type PotentialDuplicate = { report_id: string; similarity_score: number; reason: string };
+export type ReportIntelligence = {
+  report_id: string;
+  village_name: string;
+  district: string;
+  description: string;
+  classification: IncidentClassification;
+  severity: SeverityRecommendation;
+  potential_duplicates: PotentialDuplicate[];
+};
+export async function getReportIntelligence(): Promise<ReportIntelligence[]> {
+  const response = await fetch(apiBaseUrl + "/intelligence/reports");
+  if (!response.ok) throw new Error("घटना इंटेलिजेंस डेटा लोड नहीं हो सका।");
+  return response.json();
+}
+
