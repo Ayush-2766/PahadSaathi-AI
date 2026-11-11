@@ -40,6 +40,8 @@ async def create_citizen_report(
     village_name: str = Form(...),
     district: str = Form(...),
     description: str = Form(...),
+    latitude: float | None = Form(default=None),
+    longitude: float | None = Form(default=None),
     photo: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ) -> CitizenReportResponse:
@@ -49,6 +51,8 @@ async def create_citizen_report(
             "village_name": village_name,
             "district": district,
             "description": description,
+            "latitude": latitude,
+            "longitude": longitude,
         })
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail={"message": "Request validation failed", "errors": exc.errors()}) from exc
@@ -60,6 +64,8 @@ async def create_citizen_report(
             village_name=payload.village_name,
             district=payload.district,
             description=payload.description,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
             photo_path=photo_path,
         )
         db.add(report)
