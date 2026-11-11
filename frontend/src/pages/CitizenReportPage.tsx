@@ -16,7 +16,43 @@ export function CitizenReportPage() {
   useEffect(() => { const saved = loadDraft(window.localStorage) as Draft | null; if (saved) { setDraft({ ...emptyDraft, ...saved }); setMessage("सहेजी हुई ड्राफ्ट रिपोर्ट बहाल कर दी गई है। फोटो को सुरक्षा के लिए दोबारा जोड़ें।"); } return () => recognition.current?.abort(); }, []);
   function update(field: keyof Draft, value: string) { setDraft(current => ({ ...current, [field]: value })); }
   function validate() { if (!draft.category || !draft.villageName.trim() || !draft.district.trim() || draft.description.trim().length < 5) return "कृपया घटना का प्रकार, गांव, ज़िला और कम-से-कम 5 अक्षरों का विवरण भरें।"; if (photo && !["image/jpeg", "image/png", "image/webp"].includes(photo.type)) return "फोटो JPG, PNG या WebP होनी चाहिए।"; if (photo && photo.size > 5 * 1024 * 1024) return "फोटो 5 MB या उससे छोटी होनी चाहिए।"; return ""; }
-  function captureLocation() { if (!navigator.geolocation) { setLocationNote("इस डिवाइस में GPS उपलब्ध नहीं है। गांव और ज़िला भरकर रिपोर्ट भेज सकते हैं।"); return; } setLocationNote("स्थान प्राप्त किया जा रहा है…"); navigator.geolocation.getCurrentPosition(position => { setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }); setLocationNote("GPS स्थान जुड़ गया। रिपोर्ट के साथ साझा होगा।"); }, error => { setLocationNote(error.code === error.PERMISSION_DENIED ? "स्थान की अनुमति नहीं मिली। ब्राउज़र में Location अनुमति दें।" : "स्थान नहीं मिल सका। GPS चालू करके फिर कोशिश करें।"); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }); }
+  function captureLocation() {
+    if (!window.isSecureContext) {
+      setLocationNote("GPS के लिए सुरक्षित HTTPS पेज खोलें।");
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationNote("इस ब्राउज़र में लोकेशन उपलब्ध नहीं है। Chrome में खोलें और डिवाइस की Location चालू करें।");
+      return;
+    }
+    setLocation(null);
+    setLocationNote("आपकी अनुमति के बाद GPS स्थान खोजा जा रहा है…");
+    const onSuccess = (position: GeolocationPosition) => {
+      setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      const accuracy = Math.round(position.coords.accuracy);
+      setLocationNote(`GPS स्थान मिल गया (लगभग ${accuracy} मीटर की सटीकता)।`);
+    };
+    const onError = (geoError: GeolocationPositionError) => {
+      if (geoError.code === geoError.PERMISSION_DENIED) {
+        setLocationNote("लोकेशन अनुमति बंद है। ब्राउज़र के address bar में site settings खोलकर Location → Allow करें, फिर दोबारा कोशिश करें।");
+      } else if (geoError.code === geoError.POSITION_UNAVAILABLE) {
+        setLocationNote("डिवाइस स्थान नहीं बता पा रहा। फोन की Location/GPS चालू करें और खुले स्थान पर फिर कोशिश करें।");
+      } else {
+        setLocationNote("GPS में समय लग रहा है। फोन की Location चालू रखें; गांव और जिला भरकर बिना GPS भी रिपोर्ट भेज सकते हैं।");
+      }
+    };
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      geoError => {
+        if (geoError.code === geoError.PERMISSION_DENIED) { onError(geoError); return; }
+        setLocationNote("सटीक GPS नहीं मिला; नेटवर्क आधारित स्थान से कोशिश कर रहे हैं…");
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+          enableHighAccuracy: false, timeout: 20000, maximumAge: 300000
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 }
+    );
+  }
   function storeDraft() { saveDraft(window.localStorage, draft); setError(""); setMessage("ड्राफ्ट इस डिवाइस पर सहेज दी गई है। ऑनलाइन होने पर इसे भेजें।"); }
   function startVoice() { const Constructor = speechConstructor(); if (!Constructor) { setSpeechNote("इस ब्राउज़र में वॉइस इनपुट उपलब्ध नहीं है। कृपया Chrome में खोलें या विवरण लिखें।"); return; } const instance = new Constructor(); recognition.current = instance; const textBeforeRecording = draft.description.trim(); instance.lang = speechLanguage; instance.continuous = true; instance.interimResults = false; instance.onresult = event => { const finalTranscript = Array.from(event.results).filter(result => result.isFinal).map(result => result[0].transcript.trim()).filter(Boolean).join(" "); if (finalTranscript) setDraft(current => ({ ...current, description: [textBeforeRecording, finalTranscript].filter(Boolean).join(" ") })); }; instance.onerror = event => { setRecording(false); const messages: Record<string, string> = { "not-allowed": "माइक्रोफ़ोन की अनुमति नहीं मिली। ब्राउज़र सेटिंग में अनुमति दें।", "service-not-allowed": "इस ब्राउज़र में वॉइस सेवा उपलब्ध नहीं है। Chrome में कोशिश करें।", "no-speech": "आवाज़ सुनाई नहीं दी। माइक्रोफ़ोन के पास स्पष्ट और थोड़ा धीरे बोलें।", "audio-capture": "माइक्रोफ़ोन नहीं मिला। डिवाइस की माइक्रोफ़ोन सेटिंग जाँचें।", "network": "वॉइस पहचान सेवा तक नेटवर्क कनेक्शन नहीं हुआ। फिर कोशिश करें।" }; setSpeechNote(messages[event.error] ?? "वॉइस पहचान नहीं हो सकी। कृपया फिर कोशिश करें या विवरण लिखें।"); }; instance.onend = () => setRecording(false); try { instance.start(); setRecording(true); setSpeechNote(`${speechLanguage === "hi-IN" ? "हिंदी" : "English"} में सुन रहा है… पूरा वाक्य बोलें, फिर रिकॉर्डिंग रोकें।`); } catch { setSpeechNote("रिकॉर्डिंग शुरू नहीं हुई। कृपया फिर कोशिश करें या विवरण लिखें।"); } }
   function stopVoice() { recognition.current?.stop(); setRecording(false); setSpeechNote("रिकॉर्डिंग रुक गई। भेजने से पहले शब्दों को जांच और संपादित कर लें।"); }
