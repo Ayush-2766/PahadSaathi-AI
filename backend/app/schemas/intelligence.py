@@ -47,6 +47,8 @@ class ReportIntelligenceResult(IntelligenceResponse):
     status: str = "submitted"
     submitted_at: datetime
     photo_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class VillageImpact(BaseModel):
