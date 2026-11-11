@@ -2,12 +2,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.citizen_report import CitizenReport
-from app.schemas.citizen_report import CitizenReportCreate, CitizenReportResponse
+from app.schemas.citizen_report import CitizenReportCreate, CitizenReportResponse, CitizenReportStatusUpdate
 
 router = APIRouter(tags=["citizen reports"])
 
@@ -69,3 +71,42 @@ async def create_citizen_report(
             Path(photo_path).unlink(missing_ok=True)
         raise
     return CitizenReportResponse(report_id=report.public_id, status=report.status)
+
+
+@router.patch("/reports/{report_id}/status", response_model=CitizenReportResponse)
+def update_citizen_report_status(
+    report_id: str,
+    payload: CitizenReportStatusUpdate,
+    db: Session = Depends(get_db),
+) -> CitizenReportResponse:
+    report = db.scalar(select(CitizenReport).where(CitizenReport.public_id == report_id))
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    report.status = payload.status.value
+    db.commit()
+    db.refresh(report)
+    return CitizenReportResponse(report_id=report.public_id, status=report.status)
+
+
+@router.get("/reports/{report_id}/photo")
+def get_citizen_report_photo(
+    report_id: str,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    report = db.scalar(select(CitizenReport).where(CitizenReport.public_id == report_id))
+    if not report or not report.photo_path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    path = Path(report.photo_path)
+    if not path.is_file():
+        # Check relative to backend directory or photo directory
+        candidates = [
+            Path("backend") / path,
+            PHOTO_DIRECTORY / path.name,
+            Path("backend") / PHOTO_DIRECTORY / path.name,
+        ]
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found:
+            path = found
+        else:
+            raise HTTPException(status_code=404, detail="Photo file not found on disk")
+    return FileResponse(path)

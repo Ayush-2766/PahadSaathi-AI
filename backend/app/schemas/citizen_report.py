@@ -15,6 +15,14 @@ class IncidentCategory(str, Enum):
     other = "other"
 
 
+class ReportStatus(str, Enum):
+    submitted = "submitted"
+    verified = "verified"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    dismissed = "dismissed"
+
+
 class CitizenReportCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -22,6 +30,12 @@ class CitizenReportCreate(BaseModel):
     village_name: str = Field(min_length=2, max_length=160)
     district: str = Field(min_length=2, max_length=120)
     description: str = Field(min_length=5, max_length=5000)
+
+
+class CitizenReportStatusUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    status: ReportStatus
 
 
 class CitizenReportResponse(BaseModel):

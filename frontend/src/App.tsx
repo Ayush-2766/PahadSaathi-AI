@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AuthorityDashboardPage } from "./pages/AuthorityDashboardPage";
 import { CitizenReportPage } from "./pages/CitizenReportPage";
 import "./styles/global.css";
+import "./styles/emergency.css";
 type Page = "report" | "dashboard";
 export default function App() {
   const [page, setPage] = useState<Page>("report");

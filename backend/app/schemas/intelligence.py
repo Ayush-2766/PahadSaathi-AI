@@ -44,6 +44,9 @@ class ReportIntelligenceResult(IntelligenceResponse):
     village_name: str
     district: str
     description: str
+    status: str = "submitted"
+    submitted_at: datetime
+    photo_url: str | None = None
 
 
 class VillageImpact(BaseModel):
@@ -52,3 +55,33 @@ class VillageImpact(BaseModel):
     category_distribution: dict[str, int]
     severity_distribution: dict[str, int]
     potentially_duplicated_reports: int
+
+
+class IncidentBriefReport(BaseModel):
+    report_id: str
+    village_name: str
+    district: str
+    description: str
+    submitted_at: datetime
+    reported_category: str
+    ai_category: str
+    status: str = "submitted"
+    photo_url: str | None = None
+
+
+class AuthorityAction(BaseModel):
+    priority: int
+    action: str
+    basis: str
+
+
+class IncidentBrief(BaseModel):
+    incident_id: str
+    situation_summary: str
+    contributing_reports: list[IncidentBriefReport]
+    affected_villages: list[str]
+    highest_recommended_severity: str
+    detected_facts: list[str]
+    inferred_relationships: list[str]
+    recommended_verification_steps: list[str]
+    prioritized_authority_actions: list[AuthorityAction]
