@@ -16,6 +16,8 @@ class CitizenReport(Base):
     village_name: Mapped[str] = mapped_column(String(160), index=True)
     district: Mapped[str] = mapped_column(String(120), index=True)
     description: Mapped[str] = mapped_column(Text)
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)
     photo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="submitted")
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

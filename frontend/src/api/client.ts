@@ -5,10 +5,10 @@ export async function getHealth(): Promise<{ status: string; database: string }>
   return response.json();
 }
 
-export type ReportPayload = { category: string; villageName: string; district: string; description: string; photo?: File | null };
+export type ReportPayload = { category: string; villageName: string; district: string; description: string; latitude?: number | null; longitude?: number | null; photo?: File | null };
 export async function submitCitizenReport(payload: ReportPayload): Promise<{ report_id: string; status: string }> {
   const body = new FormData();
-  body.append("category", payload.category); body.append("village_name", payload.villageName); body.append("district", payload.district); body.append("description", payload.description);
+  body.append("category", payload.category); body.append("village_name", payload.villageName); body.append("district", payload.district); body.append("description", payload.description); if (payload.latitude != null) body.append("latitude", String(payload.latitude)); if (payload.longitude != null) body.append("longitude", String(payload.longitude));
   if (payload.photo) body.append("photo", payload.photo);
   const response = await fetch(apiBaseUrl + "/reports", { method: "POST", body }); const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail?.message ?? data.detail ?? "रिपोर्ट भेजा नहीं जा सका।");
@@ -52,6 +52,8 @@ export type ReportIntelligence = {
   status: string;
   submitted_at: string;
   photo_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   classification: IncidentClassification;
   severity: SeverityRecommendation;
   potential_duplicates: PotentialDuplicate[];
