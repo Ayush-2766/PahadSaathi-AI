@@ -38,6 +38,8 @@ def get_report_analyses(db: Session = Depends(get_db)) -> list[ReportIntelligenc
             status=report.status,
             submitted_at=report.submitted_at,
             photo_url=photo_url,
+            latitude=report.latitude,
+            longitude=report.longitude,
             **analysis.model_dump(),
         ))
     return results
