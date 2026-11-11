@@ -30,8 +30,17 @@ HIGH_RISK_WORDS = ("trapped", "injured", "injury", "dead", "collapsed", "evacuat
 CRITICAL_RISK_WORDS = ("life threatening", "many injured", "people trapped", "बचाओ", "जान का खतरा", "कई घायल", "लोग फंसे")
 
 
+ROMANIZED_VARIANTS = (
+    (re.compile(r"\b(?:rod|road)\s+block(?:age|ed)?\b"), "road blockage"),
+    (re.compile(r"\bsadak\s+band\b"), "road blockage"),
+)
+
+
 def _normalise(value: str) -> str:
-    return re.sub(r"\s+", " ", value.lower()).strip()
+    normalised = re.sub(r"\s+", " ", value.lower()).strip()
+    for pattern, replacement in ROMANIZED_VARIANTS:
+        normalised = pattern.sub(replacement, normalised)
+    return normalised
 
 
 def classify_incident(description: str, reported_category: str | None = None) -> dict:
@@ -77,6 +86,18 @@ def _description_similarity(first: str, second: str) -> float:
     return round(max(token_score, character_score), 2)
 
 
+def _incident_keyword_overlap(first: str, second: str, category: str) -> tuple[float, list[str]]:
+    """Return shared category evidence after spelling/transliteration normalisation."""
+    keywords = {_normalise(keyword) for keyword in CATEGORY_KEYWORDS.get(category, ())}
+    first_text, second_text = _normalise(first), _normalise(second)
+    first_matches = {keyword for keyword in keywords if keyword in first_text}
+    second_matches = {keyword for keyword in keywords if keyword in second_text}
+    shared = sorted(first_matches & second_matches)
+    all_matches = first_matches | second_matches
+    score = len(shared) / len(all_matches) if all_matches else 0.0
+    return score, shared
+
+
 def find_potential_duplicates(incoming: dict, reports: list[CitizenReport], category: str) -> list[dict]:
     submitted_at = incoming.get("submitted_at") or datetime.utcnow()
     village = _normalise(incoming.get("village_name") or "")
@@ -89,39 +110,95 @@ def find_potential_duplicates(incoming: dict, reports: list[CitizenReport], cate
         if village and _normalise(report.village_name) != village:
             continue
         existing_category = classify_incident(report.description, report.category)["predicted_category"]
-        similarity = _description_similarity(incoming["description"], report.description)
+        description_similarity = _description_similarity(incoming["description"], report.description)
         time_close = abs(submitted_at - report.submitted_at) <= timedelta(hours=48)
         category_match = category == existing_category
+        keyword_overlap, shared_keywords = _incident_keyword_overlap(incoming["description"], report.description, category) if category_match else (0.0, [])
+        similarity = round((description_similarity * 0.65) + (keyword_overlap * 0.35), 2)
         # Location/category alone are common in a village during an emergency.
-        # Always require a substantial description signal; a higher threshold
-        # for cross-category reports prevents incidental wording matches.
-        meaningful_similarity = similarity >= (0.48 if category_match else 0.72)
-        if meaningful_similarity and (category_match or time_close):
+        # Shared category evidence can help with spelling variants, but it may
+        # not independently create a match: descriptions still need a signal.
+        meaningful_similarity = (
+            description_similarity >= 0.48
+            or (category_match and keyword_overlap > 0 and description_similarity >= 0.30)
+        ) if category_match else description_similarity >= 0.72
+        if meaningful_similarity and time_close:
             reasons = ["same village"]
             if category_match:
                 reasons.append("same incident category")
+            if shared_keywords:
+                reasons.append("shared incident keywords: " + ", ".join(shared_keywords))
             if time_close:
                 reasons.append("reported within 48 hours")
-            reasons.append(f"description similarity {similarity:.0%}")
+            reasons.append(f"description similarity {description_similarity:.0%}")
             matches.append({"report_id": report.public_id, "similarity_score": similarity, "reason": "; ".join(reasons)})
     return sorted(matches, key=lambda item: item["similarity_score"], reverse=True)
 
 
 def village_impacts(reports: list[CitizenReport]) -> list[dict]:
     grouped: dict[str, list[CitizenReport]] = defaultdict(list)
+    village_names: dict[str, str] = {}
+
     for report in reports:
-        grouped[report.village_name].append(report)
+        display_name = report.village_name.strip()
+        village_key = _normalise(display_name).casefold()
+
+        grouped[village_key].append(report)
+
+        # Prefer a properly capitalised display name.
+        existing_name = village_names.get(village_key)
+        if not existing_name or (
+            existing_name == existing_name.lower()
+            and display_name != display_name.lower()
+        ):
+            village_names[village_key] = display_name
+
     output = []
-    for village, village_reports in grouped.items():
+
+    for village_key, village_reports in grouped.items():
         categories, severities = Counter(), Counter()
         duplicate_ids = set()
+
         for report in village_reports:
-            classification = classify_incident(report.description, report.category)
+            classification = classify_incident(
+                report.description, report.category
+            )
             categories[classification["predicted_category"]] += 1
-            severity = recommend_severity(classification["predicted_category"], report.description, classification["matched_keywords"])
+
+            severity = recommend_severity(
+                classification["predicted_category"],
+                report.description,
+                classification["matched_keywords"],
+            )
             severities[severity["recommended_severity"]] += 1
-            others = [candidate for candidate in village_reports if candidate.public_id != report.public_id]
-            for duplicate in find_potential_duplicates({"description": report.description, "village_name": report.village_name, "submitted_at": report.submitted_at}, others, classification["predicted_category"]):
-                duplicate_ids.update((report.public_id, duplicate["report_id"]))
-        output.append({"village_name": village, "total_incidents": len(village_reports), "category_distribution": dict(categories), "severity_distribution": dict(severities), "potentially_duplicated_reports": len(duplicate_ids)})
-    return sorted(output, key=lambda item: (-item["total_incidents"], item["village_name"]))
+
+            others = [
+                candidate for candidate in village_reports
+                if candidate.public_id != report.public_id
+            ]
+
+            for duplicate in find_potential_duplicates(
+                {
+                    "description": report.description,
+                    "village_name": report.village_name,
+                    "submitted_at": report.submitted_at,
+                },
+                others,
+                classification["predicted_category"],
+            ):
+                duplicate_ids.update(
+                    (report.public_id, duplicate["report_id"])
+                )
+
+        output.append({
+            "village_name": village_names[village_key],
+            "total_incidents": len(village_reports),
+            "category_distribution": dict(categories),
+            "severity_distribution": dict(severities),
+            "potentially_duplicated_reports": len(duplicate_ids),
+        })
+
+    return sorted(
+        output,
+        key=lambda item: (-item["total_incidents"], item["village_name"]),
+    )

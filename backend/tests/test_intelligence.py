@@ -29,6 +29,31 @@ def test_duplicate_detection_requires_meaningful_signal() -> None:
     assert no_matches == []
 
 
+def test_duplicate_detection_normalises_seraghat_road_blockage_variants() -> None:
+    submitted_at = datetime.utcnow()
+    road_blockage = CitizenReport(
+        public_id="seraghat-1", category="road_blockage", village_name="Seraghat", district="Almora",
+        description="rod block ho gyi hai yha", submitted_at=submitted_at,
+    )
+    matches = find_potential_duplicates({
+        "report_id": "seraghat-2", "description": "Road block ho gaya hai, malba sadak par gira hai aur vehicles nahi ja pa rahe hain.",
+        "village_name": "Seraghat", "submitted_at": submitted_at + timedelta(hours=1),
+    }, [road_blockage], "road_blockage")
+    assert matches[0]["report_id"] == "seraghat-1"
+    assert "shared incident keywords: road blockage" in matches[0]["reason"]
+
+
+def test_duplicate_detection_keeps_self_village_and_relevance_guards() -> None:
+    submitted_at = datetime.utcnow()
+    road_blockage = CitizenReport(public_id="same", category="road_blockage", village_name="Seraghat", district="Almora", description="road block ho gaya hai", submitted_at=submitted_at)
+    unrelated = CitizenReport(public_id="water", category="water_shortage", village_name="Seraghat", district="Almora", description="पेयजल की गंभीर कमी है", submitted_at=submitted_at)
+    other_village = CitizenReport(public_id="other-village", category="road_blockage", village_name="Dhaulchina", district="Almora", description="road blockage hai", submitted_at=submitted_at)
+    incoming = {"report_id": "same", "description": "road block ho gaya hai", "village_name": "Seraghat", "submitted_at": submitted_at}
+    assert find_potential_duplicates(incoming, [road_blockage], "road_blockage") == []
+    assert find_potential_duplicates(incoming, [unrelated], "road_blockage") == []
+    assert find_potential_duplicates(incoming, [other_village], "road_blockage") == []
+
+
 def test_intelligence_api_response_and_village_aggregation(tmp_path) -> None:
     engine = create_engine(f"sqlite:///{tmp_path / 'intelligence.db'}")
     Base.metadata.create_all(engine)
