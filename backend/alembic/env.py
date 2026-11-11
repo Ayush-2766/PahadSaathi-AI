@@ -1,13 +1,12 @@
-import os
-
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.core.config import settings
 from app.core.database import Base
 import app.models  # noqa: F401
 
 config = context.config
-database_url = os.getenv("PAHADSAATHI_DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+database_url = settings.database_url
 # ConfigParser treats percent signs in passwords as interpolation markers.
 config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
