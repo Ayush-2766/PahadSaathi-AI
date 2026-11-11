@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { IncidentMap } from "../components/IncidentMap";
 import {
   getFullPhotoUrl,
   getHealth,
@@ -227,6 +228,8 @@ export function AuthorityDashboardPage() {
               <EmptyState title="अभी कोई घटना-स्तरीय रिपोर्ट नहीं" message="नई नागरिक रिपोर्ट आने पर यहां नियम-आधारित सिफारिशें समीक्षा के लिए दिखेंगी।" />
             )}
           </section>
+
+          <IncidentMap reports={reports} />
 
           <section className="command-section geographic-overview" aria-labelledby="geographic-overview-heading">
             <div className="section-heading">
